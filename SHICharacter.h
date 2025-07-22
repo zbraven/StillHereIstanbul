@@ -7,6 +7,7 @@
 #include "Components/SHIEquipmentComponent.h"
 #include "Data/SHIItemData.h"
 #include "Systems/SHIWorldItem.h"
+#include "UI/SHIEquipmentPanelWidget.h"  // ⬅️ EQUIPMENT PANEL WIDGET INCLUDE
 #include "SHICharacter.generated.h"
 
 // Forward declarations for classes we only use as pointers
@@ -69,6 +70,9 @@ protected:
     UInputAction* ToggleEquipmentAction;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+    UInputAction* ToggleEquipmentPanelAction;  // ⬅️ NEW: K KEY FOR EQUIPMENT PANEL
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
     UInputAction* TestEquipAction;
 
     // Consumable actions (3,4,5,6 keys)
@@ -113,6 +117,13 @@ protected:
 
     UPROPERTY()
     USHIInventoryWidget* InventoryWidget;
+
+    // ⬅️ NEW: Equipment Panel UI Components
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+    TSubclassOf<USHIEquipmentPanelWidget> EquipmentPanelWidgetClass;
+
+    UPROPERTY()
+    USHIEquipmentPanelWidget* EquipmentPanelWidget;
 
     // Test Items for development
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Test Items")
@@ -195,6 +206,10 @@ protected:
     UFUNCTION(BlueprintCallable, Category = "SHI UI")
     void ToggleEquipmentDisplay();
 
+    // ⬅️ NEW: Equipment Panel Functions
+    UFUNCTION(BlueprintCallable, Category = "SHI UI")
+    void ToggleEquipmentPanel();
+
     // Equipment functions
     UFUNCTION(BlueprintCallable, Category = "SHI Equipment")
     void SwitchToWeapon1();
@@ -242,6 +257,10 @@ protected:
 
     UFUNCTION(Server, Reliable, BlueprintCallable, Category = "SHI Network")
     void Server_UseConsumableSlot(int32 SlotNumber);
+
+    // ⬅️ NEW: Equipment Panel Network Function
+    UFUNCTION(Server, Reliable, BlueprintCallable, Category = "SHI Network")
+    void Server_ToggleEquipmentPanel();
 
     // Equipment event handlers
     UFUNCTION()

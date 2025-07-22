@@ -57,6 +57,7 @@ ASHICharacter::ASHICharacter()
     NearbyWorldItem = nullptr;
     StatsWidget = nullptr;
     InventoryWidget = nullptr;
+    EquipmentPanelWidget = nullptr;  // ⬅️ NEW: Initialize Equipment Panel Widget
 }
 
 void ASHICharacter::BeginPlay()
@@ -108,6 +109,7 @@ void ASHICharacter::BeginPlay()
     UE_LOG(LogTemp, Log, TEXT("UI Widget Classes:"));
     UE_LOG(LogTemp, Log, TEXT(" Stats Widget Class: %s"), StatsWidgetClass ? TEXT("Set") : TEXT("NULL"));
     UE_LOG(LogTemp, Log, TEXT(" Inventory Widget Class: %s"), InventoryWidgetClass ? TEXT("Set") : TEXT("NULL"));
+    UE_LOG(LogTemp, Log, TEXT(" Equipment Panel Widget Class: %s"), EquipmentPanelWidgetClass ? TEXT("Set") : TEXT("NULL"));  // ⬅️ NEW
 }
 
 void ASHICharacter::Tick(float DeltaTime)
@@ -148,8 +150,11 @@ void ASHICharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
         // SHI Toggle Inventory (B key)
         EnhancedInputComponent->BindAction(ToggleInventoryAction, ETriggerEvent::Triggered, this, &ASHICharacter::ToggleInventoryDisplay);
 
-        // SHI Toggle Equipment (K key)
+        // SHI Toggle Equipment (K key) - OLD PLACEHOLDER
         EnhancedInputComponent->BindAction(ToggleEquipmentAction, ETriggerEvent::Triggered, this, &ASHICharacter::ToggleEquipmentDisplay);
+
+        // ⬅️ NEW: SHI Toggle Equipment Panel (K key) - ACTUAL IMPLEMENTATION
+        EnhancedInputComponent->BindAction(ToggleEquipmentPanelAction, ETriggerEvent::Triggered, this, &ASHICharacter::ToggleEquipmentPanel);
 
         // Weapon Switching (1/2 keys)
         EnhancedInputComponent->BindAction(SwitchWeapon1Action, ETriggerEvent::Triggered, this, &ASHICharacter::SwitchToWeapon1);
@@ -324,12 +329,70 @@ void ASHICharacter::ToggleInventoryDisplay()
 
 void ASHICharacter::ToggleEquipmentDisplay()
 {
-    // Placeholder for equipment panel UI - will implement in next phase
+    // OLD PLACEHOLDER - Keep for backward compatibility if needed
     if (GEngine)
     {
-        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Purple, TEXT("Equipment Panel - Yakında gelecek!"));
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Purple, TEXT("Equipment Display - Use K for Equipment Panel!"));
     }
-    UE_LOG(LogTemp, Log, TEXT("Equipment panel toggle requested - UI coming next"));
+    UE_LOG(LogTemp, Log, TEXT("Equipment display toggle - redirecting to Equipment Panel"));
+}
+
+// ⬅️ NEW: Equipment Panel Toggle Implementation
+void ASHICharacter::ToggleEquipmentPanel()
+{
+    // Handle client-side for UI responsiveness
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        if (PC->IsLocalController())
+        {
+            if (!EquipmentPanelWidget && EquipmentPanelWidgetClass)
+            {
+                EquipmentPanelWidget = CreateWidget<USHIEquipmentPanelWidget>(PC, EquipmentPanelWidgetClass);
+                if (EquipmentPanelWidget)
+                {
+                    EquipmentPanelWidget->SetOwnerCharacter(this);
+                    EquipmentPanelWidget->AddToViewport();
+                    UE_LOG(LogTemp, Log, TEXT("Equipment panel created and shown"));
+                    
+                    if (GEngine)
+                    {
+                        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Purple, TEXT("Equipment Panel Açıldı"));
+                    }
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("Failed to create equipment panel widget"));
+                    if (GEngine)
+                    {
+                        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("Equipment Panel Widget Class ayarlanmamış!"));
+                    }
+                }
+            }
+            else if (EquipmentPanelWidget)
+            {
+                if (EquipmentPanelWidget->IsInViewport())
+                {
+                    EquipmentPanelWidget->RemoveFromParent();
+                    UE_LOG(LogTemp, Log, TEXT("Equipment panel hidden"));
+                    
+                    if (GEngine)
+                    {
+                        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Orange, TEXT("Equipment Panel Kapatıldı"));
+                    }
+                }
+                else
+                {
+                    EquipmentPanelWidget->AddToViewport();
+                    UE_LOG(LogTemp, Log, TEXT("Equipment panel shown"));
+                    
+                    if (GEngine)
+                    {
+                        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Purple, TEXT("Equipment Panel Açıldı"));
+                    }
+                }
+            }
+        }
+    }
 }
 
 void ASHICharacter::SwitchToWeapon1()
@@ -801,4 +864,11 @@ void ASHICharacter::Server_ToggleInventoryDisplay_Implementation()
 {
     // This function kept for consistency but inventory display is handled client-side
     UE_LOG(LogTemp, Log, TEXT("Server received inventory display toggle request"));
+}
+
+// ⬅️ NEW: Equipment Panel Server Implementation
+void ASHICharacter::Server_ToggleEquipmentPanel_Implementation()
+{
+    // Consistency function, UI handled client-side
+    UE_LOG(LogTemp, Log, TEXT("Server received equipment panel toggle request"));
 }
