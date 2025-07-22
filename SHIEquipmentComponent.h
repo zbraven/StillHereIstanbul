@@ -35,6 +35,7 @@ struct FSHIEquipmentState
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment")
     FSHIEquipmentSlot KupeSlot;
+    
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Equipment")
     ESHIEquipmentSlot ActiveWeaponSlot = ESHIEquipmentSlot::Silah1;

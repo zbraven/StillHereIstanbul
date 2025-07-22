@@ -499,7 +499,7 @@ void ASHICharacter::RecalculateStatsFromEquipment()
     
     UE_LOG(LogTemp, Log, TEXT("Recalculating stats from equipment: %d bonuses found"), EquipmentBonuses.Num());
     
-    // Apply equipment bonuses to stats component
+    // ⬅️ FIX: ACTUALLY APPLY THE BONUSES TO STATS COMPONENT
     StatsComponent->ApplyEquipmentBonuses(EquipmentBonuses);
     
     // Log the results for debugging
@@ -510,13 +510,19 @@ void ASHICharacter::RecalculateStatsFromEquipment()
     }
     
     // Show updated stats on screen for testing
-    if (GEngine && EquipmentBonuses.Num() > 0)
+    if (GEngine)
     {
         FString StatsText = FString::Printf(TEXT("Stats Updated! Güç: %.0f, Çeviklik: %.0f, Zeka: %.0f"), 
             StatsComponent->GetCurrentGuc(), 
             StatsComponent->GetCurrentCeviklik(), 
             StatsComponent->GetCurrentZeka());
         GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan, StatsText);
+        
+        // Also show base vs current comparison
+        FString ComparisonText = FString::Printf(TEXT("Base Güç: %.0f | Current Güç: %.0f"), 
+            StatsComponent->GetBaseStats().Guc, 
+            StatsComponent->GetCurrentGuc());
+        GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, ComparisonText);
     }
 }
 

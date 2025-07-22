@@ -23,7 +23,10 @@ enum class ESHIEquipmentSlot : uint8
 {
     None            UMETA(DisplayName = "Yok"),
     Kask            UMETA(DisplayName = "Kask"),          // Helmet
-    GoguslukZirhi   UMETA(DisplayName = "Göğüslük"),     // Chest Armor
+    GoguslukZirhi   UMETA(DisplayName = "Göğüslük"),      // Chest Armor
+    Eldiven         UMETA(DisplayName = "Eldiven"),       // Gloves
+    Pantolon        UMETA(DisplayName = "Pantolon"),      // Pants
+    Ayakkabi        UMETA(DisplayName = "Ayakkabı"),      // Boots
     Kalkan          UMETA(DisplayName = "Kalkan"),        // Shield
     Silah1          UMETA(DisplayName = "Silah-1"),       // Primary Weapon
     Silah2          UMETA(DisplayName = "Silah-2"),       // Secondary Weapon  
@@ -167,6 +170,9 @@ public:
         {
             case ESHIEquipmentSlot::Kask:
             case ESHIEquipmentSlot::GoguslukZirhi:
+        case ESHIEquipmentSlot::Eldiven:      
+        case ESHIEquipmentSlot::Pantolon:     
+        case ESHIEquipmentSlot::Ayakkabi:     
                 return ItemType == ESHIItemType::Zirh;
                 
             case ESHIEquipmentSlot::Silah1:
