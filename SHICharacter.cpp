@@ -878,3 +878,8 @@ void ASHICharacter::Server_ToggleEquipmentPanel_Implementation()
     // Consistency function, UI handled client-side
     UE_LOG(LogTemp, Log, TEXT("Server received equipment panel toggle request"));
 }
+
+void ASHICharacter::UseConsumableSlot(int32 SlotIndex)
+{
+    UE_LOG(LogTemp, Log, TEXT("Character: UseConsumableSlot called for slot %d"), SlotIndex);
+}

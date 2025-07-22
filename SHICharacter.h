@@ -179,6 +179,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "SHI Equipment")
     USHIEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
 
+    UFUNCTION(BlueprintCallable, Category = "SHI Consumables")
+    void UseConsumableSlot(int32 SlotIndex);
+
 protected:
     // UE5.6 Enhanced Input Functions
     void Move(const FInputActionValue& Value);
