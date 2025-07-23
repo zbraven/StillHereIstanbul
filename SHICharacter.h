@@ -7,7 +7,8 @@
 #include "Components/SHIEquipmentComponent.h"
 #include "Data/SHIItemData.h"
 #include "Systems/SHIWorldItem.h"
-#include "UI/SHIEquipmentPanelWidget.h"  // ⬅️ EQUIPMENT PANEL WIDGET INCLUDE
+#include "UI/SHIEquipmentPanelWidget.h"
+#include "UI/SHIConsumablesHotbarWidget.h"
 #include "SHICharacter.generated.h"
 
 // Forward declarations for classes we only use as pointers
@@ -70,7 +71,7 @@ protected:
     UInputAction* ToggleEquipmentAction;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-    UInputAction* ToggleEquipmentPanelAction;  // ⬅️ NEW: K KEY FOR EQUIPMENT PANEL
+    UInputAction* ToggleEquipmentPanelAction;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
     UInputAction* TestEquipAction;
@@ -87,6 +88,10 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
     UInputAction* UseConsumable6Action;
+
+    // ⬅️ NEW: Test actions
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+    UInputAction* TestPopulateHotbarAction; // Y key for hotbar test
 
     // Camera Components
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
@@ -118,12 +123,17 @@ protected:
     UPROPERTY()
     USHIInventoryWidget* InventoryWidget;
 
-    // ⬅️ NEW: Equipment Panel UI Components
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
     TSubclassOf<USHIEquipmentPanelWidget> EquipmentPanelWidgetClass;
 
     UPROPERTY()
     USHIEquipmentPanelWidget* EquipmentPanelWidget;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
+    TSubclassOf<USHIConsumablesHotbarWidget> ConsumablesHotbarWidgetClass;
+
+    UPROPERTY()
+    USHIConsumablesHotbarWidget* ConsumablesHotbarWidget;
 
     // Test Items for development
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Test Items")
@@ -143,6 +153,10 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Test Items")
     USHIItemData* TestArmorItem;
+
+    // ⬅️ NEW: Test items for spawning and consumables
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SHI Debug")
+    TArray<USHIItemData*> TestConsumableItems; // Consumable test items
 
     // Test item cycling
     UPROPERTY()
@@ -179,8 +193,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "SHI Equipment")
     USHIEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
 
+    // Consumables hotbar functions
     UFUNCTION(BlueprintCallable, Category = "SHI Consumables")
     void UseConsumableSlot(int32 SlotIndex);
+
+    UFUNCTION(BlueprintCallable, Category = "SHI Consumables") 
+    void SetHotbarSlot(int32 SlotIndex, USHIItemData* Item, int32 Quantity);
 
 protected:
     // UE5.6 Enhanced Input Functions
@@ -209,9 +227,12 @@ protected:
     UFUNCTION(BlueprintCallable, Category = "SHI UI")
     void ToggleEquipmentDisplay();
 
-    // ⬅️ NEW: Equipment Panel Functions
     UFUNCTION(BlueprintCallable, Category = "SHI UI")
     void ToggleEquipmentPanel();
+
+    // ⬅️ NEW: SHI specific functions (mevcut kodların altına)
+    UFUNCTION(BlueprintCallable, Category = "SHI Debug")
+    void TestPopulateHotbar(); // Hotbar test function
 
     // Equipment functions
     UFUNCTION(BlueprintCallable, Category = "SHI Equipment")
@@ -261,7 +282,6 @@ protected:
     UFUNCTION(Server, Reliable, BlueprintCallable, Category = "SHI Network")
     void Server_UseConsumableSlot(int32 SlotNumber);
 
-    // ⬅️ NEW: Equipment Panel Network Function
     UFUNCTION(Server, Reliable, BlueprintCallable, Category = "SHI Network")
     void Server_ToggleEquipmentPanel();
 

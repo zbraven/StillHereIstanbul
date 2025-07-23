@@ -57,7 +57,8 @@ ASHICharacter::ASHICharacter()
     NearbyWorldItem = nullptr;
     StatsWidget = nullptr;
     InventoryWidget = nullptr;
-    EquipmentPanelWidget = nullptr;  // ⬅️ NEW: Initialize Equipment Panel Widget
+    EquipmentPanelWidget = nullptr;
+    ConsumablesHotbarWidget = nullptr;
 }
 
 void ASHICharacter::BeginPlay()
@@ -96,6 +97,43 @@ void ASHICharacter::BeginPlay()
         EquipmentComponent->OnActiveWeaponChanged.AddDynamic(this, &ASHICharacter::OnActiveWeaponChanged);
     }
 
+    // Initialize consumables hotbar on client
+    if (IsLocallyControlled() && ConsumablesHotbarWidgetClass)
+    {
+        if (APlayerController* PC = Cast<APlayerController>(GetController()))
+        {
+            ConsumablesHotbarWidget = CreateWidget<USHIConsumablesHotbarWidget>(PC, ConsumablesHotbarWidgetClass);
+            if (ConsumablesHotbarWidget)
+            {
+                ConsumablesHotbarWidget->SetOwnerCharacter(this);
+                ConsumablesHotbarWidget->AddToViewport();
+                
+                UE_LOG(LogTemp, Log, TEXT("Consumables hotbar initialized"));
+                
+                // Add some test consumables for testing
+                if (TestPotionItem)
+                {
+                    ConsumablesHotbarWidget->SetSlotItem(3, TestPotionItem, 5);
+                    ConsumablesHotbarWidget->SetSlotItem(4, TestPotionItem, 3);
+                    UE_LOG(LogTemp, Log, TEXT("Test consumables added to hotbar"));
+                }
+            }
+        }
+    }
+
+    // ⬅️ NEW: Initialize test consumable items if not set in Blueprint
+    if (TestConsumableItems.Num() == 0)
+    {
+        // Create default test consumables
+        UE_LOG(LogTemp, Warning, TEXT("Test consumable items not configured in Blueprint - using defaults"));
+        UE_LOG(LogTemp, Log, TEXT("Use Y key to populate hotbar with test consumables"));
+        
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, TEXT("Press Y to populate hotbar with test items"));
+        }
+    }
+
     // Test items validation
     UE_LOG(LogTemp, Log, TEXT("Test Items Status:"));
     UE_LOG(LogTemp, Log, TEXT(" Sword: %s"), TestSwordItem ? TEXT("Loaded") : TEXT("NULL"));
@@ -109,7 +147,8 @@ void ASHICharacter::BeginPlay()
     UE_LOG(LogTemp, Log, TEXT("UI Widget Classes:"));
     UE_LOG(LogTemp, Log, TEXT(" Stats Widget Class: %s"), StatsWidgetClass ? TEXT("Set") : TEXT("NULL"));
     UE_LOG(LogTemp, Log, TEXT(" Inventory Widget Class: %s"), InventoryWidgetClass ? TEXT("Set") : TEXT("NULL"));
-    UE_LOG(LogTemp, Log, TEXT(" Equipment Panel Widget Class: %s"), EquipmentPanelWidgetClass ? TEXT("Set") : TEXT("NULL"));  // ⬅️ NEW
+    UE_LOG(LogTemp, Log, TEXT(" Equipment Panel Widget Class: %s"), EquipmentPanelWidgetClass ? TEXT("Set") : TEXT("NULL"));
+    UE_LOG(LogTemp, Log, TEXT(" Consumables Hotbar Widget Class: %s"), ConsumablesHotbarWidgetClass ? TEXT("Set") : TEXT("NULL"));
 }
 
 void ASHICharacter::Tick(float DeltaTime)
@@ -153,7 +192,7 @@ void ASHICharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
         // SHI Toggle Equipment (K key) - OLD PLACEHOLDER
         EnhancedInputComponent->BindAction(ToggleEquipmentAction, ETriggerEvent::Triggered, this, &ASHICharacter::ToggleEquipmentDisplay);
 
-        // ⬅️ NEW: SHI Toggle Equipment Panel (K key) - ACTUAL IMPLEMENTATION
+        // SHI Toggle Equipment Panel (K key) - ACTUAL IMPLEMENTATION
         EnhancedInputComponent->BindAction(ToggleEquipmentPanelAction, ETriggerEvent::Triggered, this, &ASHICharacter::ToggleEquipmentPanel);
 
         // Weapon Switching (1/2 keys)
@@ -163,11 +202,17 @@ void ASHICharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
         // Test Equipment (U key)
         EnhancedInputComponent->BindAction(TestEquipAction, ETriggerEvent::Triggered, this, &ASHICharacter::TestEquipItem);
 
-        // Consumable actions (3,4,5,6 keys)
+        // SHI Consumables (3,4,5,6 keys) - existing
         EnhancedInputComponent->BindAction(UseConsumable3Action, ETriggerEvent::Triggered, this, &ASHICharacter::UseConsumableSlot3);
         EnhancedInputComponent->BindAction(UseConsumable4Action, ETriggerEvent::Triggered, this, &ASHICharacter::UseConsumableSlot4);
         EnhancedInputComponent->BindAction(UseConsumable5Action, ETriggerEvent::Triggered, this, &ASHICharacter::UseConsumableSlot5);
         EnhancedInputComponent->BindAction(UseConsumable6Action, ETriggerEvent::Triggered, this, &ASHICharacter::UseConsumableSlot6);
+
+        // ⬅️ NEW: Hotbar test key (Y tuşu)
+        if (TestPopulateHotbarAction)
+        {
+            EnhancedInputComponent->BindAction(TestPopulateHotbarAction, ETriggerEvent::Triggered, this, &ASHICharacter::TestPopulateHotbar);
+        }
     }
 }
 
@@ -337,7 +382,6 @@ void ASHICharacter::ToggleEquipmentDisplay()
     UE_LOG(LogTemp, Log, TEXT("Equipment display toggle - redirecting to Equipment Panel"));
 }
 
-// ⬅️ NEW: Equipment Panel Toggle Implementation
 void ASHICharacter::ToggleEquipmentPanel()
 {
     // Handle client-side for UI responsiveness
@@ -427,24 +471,72 @@ void ASHICharacter::TestEquipItem()
     Server_TestEquipItem();
 }
 
+// ⬅️ NEW: File sonuna TestPopulateHotbar implementation ekle
+void ASHICharacter::TestPopulateHotbar()
+{
+    UE_LOG(LogTemp, Warning, TEXT("Populating hotbar with test consumables"));
+
+    // Test consumable items (hardcoded for now)
+    TArray<FString> TestConsumableNames = {
+        TEXT("Health Potion"),
+        TEXT("Mana Potion"), 
+        TEXT("Stamina Potion"),
+        TEXT("Speed Potion")
+    };
+
+    // Create test consumable items and add to hotbar
+    for (int32 i = 0; i < 4; i++)
+    {
+        int32 SlotIndex = i + 3; // Slots 3,4,5,6
+        
+        // Create a temporary test consumable item
+        USHIItemData* TestConsumable = NewObject<USHIItemData>();
+        if (TestConsumable)
+        {
+            TestConsumable->ItemName = FText::FromString(TestConsumableNames[i]);
+            TestConsumable->ItemType = ESHIItemType::Tuketim;
+            TestConsumable->ItemDescription = FText::FromString(FString::Printf(TEXT("Test %s for hotbar slot %d"), *TestConsumableNames[i], SlotIndex));
+            TestConsumable->MaxStackSize = 10;
+            
+            // Add to hotbar with quantity 5
+            SetHotbarSlot(SlotIndex, TestConsumable, 5);
+            
+            UE_LOG(LogTemp, Log, TEXT("Added %s to hotbar slot %d"), *TestConsumableNames[i], SlotIndex);
+        }
+    }
+
+    // Visual feedback
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Magenta, TEXT("Hotbar Populated with Test Items!"));
+    }
+
+    // Also show usage instructions
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan, TEXT("Use Keys 3,4,5,6 to consume items"));
+    }
+}
+
+// ⬅️ UPDATED: Ayrıca UseConsumableSlot3-6 functions'ları güncelle
 void ASHICharacter::UseConsumableSlot3()
 {
-    Server_UseConsumableSlot(3);
+    UseConsumableSlot(3);
 }
 
 void ASHICharacter::UseConsumableSlot4()
 {
-    Server_UseConsumableSlot(4);
+    UseConsumableSlot(4);
 }
 
 void ASHICharacter::UseConsumableSlot5()
 {
-    Server_UseConsumableSlot(5);
+    UseConsumableSlot(5);
 }
 
 void ASHICharacter::UseConsumableSlot6()
 {
-    Server_UseConsumableSlot(6);
+    UseConsumableSlot(6);
 }
 
 void ASHICharacter::OnEquipmentChanged(ESHIEquipmentSlot SlotType, USHIItemData* NewItem, USHIItemData* OldItem)
@@ -499,7 +591,7 @@ void ASHICharacter::RecalculateStatsFromEquipment()
     
     UE_LOG(LogTemp, Log, TEXT("Recalculating stats from equipment: %d bonuses found"), EquipmentBonuses.Num());
     
-    // ⬅️ FIX: ACTUALLY APPLY THE BONUSES TO STATS COMPONENT
+    // FIX: ACTUALLY APPLY THE BONUSES TO STATS COMPONENT
     StatsComponent->ApplyEquipmentBonuses(EquipmentBonuses);
     
     // Log the results for debugging
@@ -523,6 +615,48 @@ void ASHICharacter::RecalculateStatsFromEquipment()
             StatsComponent->GetBaseStats().Guc, 
             StatsComponent->GetCurrentGuc());
         GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow, ComparisonText);
+    }
+}
+
+// Consumables Functions Implementation
+void ASHICharacter::UseConsumableSlot(int32 SlotIndex)
+{
+    // Validate slot index
+    if (SlotIndex < 3 || SlotIndex > 6)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Invalid consumable slot index: %d"), SlotIndex);
+        return;
+    }
+
+    // Use through hotbar widget
+    if (ConsumablesHotbarWidget)
+    {
+        ConsumablesHotbarWidget->UseSlot(SlotIndex);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Consumables hotbar widget not found"));
+    }
+
+    // Server call for validation/sync
+    Server_UseConsumableSlot(SlotIndex);
+
+    // Visual feedback
+    if (GEngine)
+    {
+        FString UseText = FString::Printf(TEXT("Consumable Slot %d Used"), SlotIndex);
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Magenta, UseText);
+    }
+}
+
+void ASHICharacter::SetHotbarSlot(int32 SlotIndex, USHIItemData* Item, int32 Quantity)
+{
+    if (ConsumablesHotbarWidget)
+    {
+        ConsumablesHotbarWidget->SetSlotItem(SlotIndex, Item, Quantity);
+        
+        UE_LOG(LogTemp, Log, TEXT("Hotbar slot %d set to: %s x%d"), 
+               SlotIndex, Item ? *Item->ItemName.ToString() : TEXT("Empty"), Quantity);
     }
 }
 
@@ -850,14 +984,20 @@ void ASHICharacter::Server_TestEquipItem_Implementation()
 
 void ASHICharacter::Server_UseConsumableSlot_Implementation(int32 SlotNumber)
 {
-    // Placeholder for consumable usage - will be implemented with hotbar system
+    // Server-side validation and sync
+    UE_LOG(LogTemp, Log, TEXT("Server: Consumable slot %d used"), SlotNumber);
+    
+    // Here you would:
+    // 1. Validate the consumable usage
+    // 2. Apply server-side effects
+    // 3. Update client states
+    
+    // For now, just log
     if (GEngine)
     {
-        FString ConsumableText = FString::Printf(TEXT("Consumable Slot %d kullanıldı!"), SlotNumber);
-        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, ConsumableText);
+        FString ServerText = FString::Printf(TEXT("Server: Slot %d validated"), SlotNumber);
+        GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Orange, ServerText);
     }
-    
-    UE_LOG(LogTemp, Log, TEXT("Consumable slot %d used - implementation coming with hotbar system"), SlotNumber);
 }
 
 void ASHICharacter::Server_ToggleStatsDisplay_Implementation()
@@ -872,14 +1012,8 @@ void ASHICharacter::Server_ToggleInventoryDisplay_Implementation()
     UE_LOG(LogTemp, Log, TEXT("Server received inventory display toggle request"));
 }
 
-// ⬅️ NEW: Equipment Panel Server Implementation
 void ASHICharacter::Server_ToggleEquipmentPanel_Implementation()
 {
     // Consistency function, UI handled client-side
     UE_LOG(LogTemp, Log, TEXT("Server received equipment panel toggle request"));
-}
-
-void ASHICharacter::UseConsumableSlot(int32 SlotIndex)
-{
-    UE_LOG(LogTemp, Log, TEXT("Character: UseConsumableSlot called for slot %d"), SlotIndex);
 }
