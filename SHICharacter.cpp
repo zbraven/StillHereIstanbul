@@ -50,6 +50,9 @@ ASHICharacter::ASHICharacter()
     // Create SHI Equipment Component
     EquipmentComponent = CreateDefaultSubobject<USHIEquipmentComponent>(TEXT("EquipmentComponent"));
 
+    // Create SHI Ability Component
+    AbilityComponent = CreateDefaultSubobject<USHIAbilityComponent>(TEXT("AbilityComponent"));
+
     // Initialize properties
     CurrentTestItemIndex = 0;
     SpawnItemIndex = 0;
@@ -212,6 +215,20 @@ void ASHICharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
         if (TestPopulateHotbarAction)
         {
             EnhancedInputComponent->BindAction(TestPopulateHotbarAction, ETriggerEvent::Triggered, this, &ASHICharacter::TestPopulateHotbar);
+        }
+
+        // SHI Combat Abilities (Q,R,F keys)
+        if (UseQAbilityAction)
+        {
+            EnhancedInputComponent->BindAction(UseQAbilityAction, ETriggerEvent::Triggered, this, &ASHICharacter::UseQAbility);
+        }
+        if (UseRAbilityAction)
+        {
+            EnhancedInputComponent->BindAction(UseRAbilityAction, ETriggerEvent::Triggered, this, &ASHICharacter::UseRAbility);
+        }
+        if (UseFAbilityAction)
+        {
+            EnhancedInputComponent->BindAction(UseFAbilityAction, ETriggerEvent::Triggered, this, &ASHICharacter::UseFAbility);
         }
     }
 }
@@ -576,6 +593,9 @@ void ASHICharacter::OnActiveWeaponChanged(ESHIEquipmentSlot NewActiveWeapon)
     {
         UE_LOG(LogTemp, Log, TEXT("No active weapon equipped"));
     }
+
+    // Update abilities for new weapon
+    OnActiveWeaponChanged_Abilities(NewActiveWeapon);
 }
 
 void ASHICharacter::RecalculateStatsFromEquipment()
@@ -618,28 +638,80 @@ void ASHICharacter::RecalculateStatsFromEquipment()
     }
 }
 
-// Consumables Functions Implementation
+// Consumables Functions Implementation - CRASH SAFE VERSION
 void ASHICharacter::UseConsumableSlot(int32 SlotIndex)
 {
+    UE_LOG(LogTemp, Warning, TEXT("=== UseConsumableSlot Called: Slot %d ==="), SlotIndex);
+
     // Validate slot index
     if (SlotIndex < 3 || SlotIndex > 6)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid consumable slot index: %d"), SlotIndex);
+        UE_LOG(LogTemp, Error, TEXT("Invalid consumable slot index: %d"), SlotIndex);
         return;
     }
 
-    // Use through hotbar widget
-    if (ConsumablesHotbarWidget)
+    // Check if we have a valid controller
+    if (!GetController())
+    {
+        UE_LOG(LogTemp, Error, TEXT("No valid controller found"));
+        return;
+    }
+
+    // Check if ConsumablesHotbarWidget exists
+    if (!ConsumablesHotbarWidget)
+    {
+        UE_LOG(LogTemp, Error, TEXT("ConsumablesHotbarWidget is NULL"));
+        
+        // Try to create it if missing
+        if (ConsumablesHotbarWidgetClass)
+        {
+            if (APlayerController* PC = Cast<APlayerController>(GetController()))
+            {
+                ConsumablesHotbarWidget = CreateWidget<USHIConsumablesHotbarWidget>(PC, ConsumablesHotbarWidgetClass);
+                if (ConsumablesHotbarWidget)
+                {
+                    ConsumablesHotbarWidget->SetOwnerCharacter(this);
+                    ConsumablesHotbarWidget->AddToViewport();
+                    UE_LOG(LogTemp, Log, TEXT("Created missing ConsumablesHotbarWidget"));
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("Failed to create ConsumablesHotbarWidget"));
+                    return;
+                }
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("No PlayerController found"));
+                return;
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("ConsumablesHotbarWidgetClass is not set"));
+            return;
+        }
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("About to call UseSlot on hotbar widget"));
+
+    // Use through hotbar widget with safety checks
+    if (IsValid(ConsumablesHotbarWidget))
     {
         ConsumablesHotbarWidget->UseSlot(SlotIndex);
+        UE_LOG(LogTemp, Log, TEXT("Successfully called UseSlot"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Consumables hotbar widget not found"));
+        UE_LOG(LogTemp, Error, TEXT("ConsumablesHotbarWidget is not valid"));
+        return;
     }
 
-    // Server call for validation/sync
-    Server_UseConsumableSlot(SlotIndex);
+    // Server call for validation/sync  
+    if (HasAuthority() || GetLocalRole() == ROLE_AutonomousProxy)
+    {
+        Server_UseConsumableSlot(SlotIndex);
+    }
 
     // Visual feedback
     if (GEngine)
@@ -647,6 +719,8 @@ void ASHICharacter::UseConsumableSlot(int32 SlotIndex)
         FString UseText = FString::Printf(TEXT("Consumable Slot %d Used"), SlotIndex);
         GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Magenta, UseText);
     }
+
+    UE_LOG(LogTemp, Warning, TEXT("=== UseConsumableSlot Completed Successfully ==="));
 }
 
 void ASHICharacter::SetHotbarSlot(int32 SlotIndex, USHIItemData* Item, int32 Quantity)
@@ -913,67 +987,91 @@ void ASHICharacter::Server_TestEquipItem_Implementation()
         return;
     }
 
-    // Test equipment items array
-    TArray<USHIItemData*> TestEquipmentItems = {
-        TestSwordItem, TestShieldItem, TestHelmetItem, 
-        TestArmorItem, TestSwordItem // Add sword twice for weapon switching test
-    };
+    // Original working cycle logic - RESTORED
+    TArray<USHIItemData*> TestItems;
+    TArray<ESHIEquipmentSlot> TestSlots;
+    TArray<FString> TestNames;
 
-    TArray<ESHIEquipmentSlot> TestSlots = {
-        ESHIEquipmentSlot::Silah1, ESHIEquipmentSlot::Kalkan, ESHIEquipmentSlot::Kask,
-        ESHIEquipmentSlot::GoguslukZirhi, ESHIEquipmentSlot::Silah2
-    };
-
-    if (TestEquipmentItems.Num() > 0 && TestSlots.Num() > 0)
+    // Build test items array (same as original)
+    if (TestSwordItem)
     {
-        int32 ItemIndex = CurrentTestEquipIndex % TestEquipmentItems.Num();
-        int32 SlotIndex = CurrentTestEquipIndex % TestSlots.Num();
-        
-        USHIItemData* ItemToEquip = TestEquipmentItems[ItemIndex];
-        ESHIEquipmentSlot SlotToEquip = TestSlots[SlotIndex];
+        TestItems.Add(TestSwordItem);
+        TestSlots.Add(ESHIEquipmentSlot::Silah1);
+        TestNames.Add("Test Kılıcı");
+    }
 
-        if (ItemToEquip)
+    // ADD: Shield support (NEW) - using existing TestShieldItem
+    if (TestShieldItem)
+    {
+        TestItems.Add(TestShieldItem);
+        TestSlots.Add(ESHIEquipmentSlot::Kalkan);
+        TestNames.Add("Test Kalkanı");
+    }
+
+    if (TestHelmetItem)
+    {
+        TestItems.Add(TestHelmetItem);
+        TestSlots.Add(ESHIEquipmentSlot::Kask);
+        TestNames.Add("Test Kaskı");
+    }
+
+    if (TestArmorItem)
+    {
+        TestItems.Add(TestArmorItem);
+        TestSlots.Add(ESHIEquipmentSlot::GoguslukZirhi);
+        TestNames.Add("Test Zırhı");
+    }
+
+    if (TestItems.Num() == 0)
+    {
+        if (GEngine)
         {
-            // Check if we can equip this item
-            if (EquipmentComponent->CanEquipItem(ItemToEquip, SlotToEquip))
+            GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("Test item'ları tanımlanmamış!"));
+        }
+        UE_LOG(LogTemp, Warning, TEXT("No test items configured"));
+        return;
+    }
+
+    // Use existing cycle index (ORIGINAL LOGIC)
+    USHIItemData* ItemToEquip = TestItems[CurrentTestEquipIndex];
+    ESHIEquipmentSlot TargetSlot = TestSlots[CurrentTestEquipIndex];
+    FString ItemName = TestNames[CurrentTestEquipIndex];
+
+    // NEW: Shield dependency check
+    if (TargetSlot == ESHIEquipmentSlot::Kalkan)
+    {
+        if (EquipmentComponent && !EquipmentComponent->CanEquipShield())
+        {
+            if (GEngine)
             {
-                EquipmentComponent->Server_EquipItem(SlotToEquip, ItemToEquip, 1);
-                
-                UE_LOG(LogTemp, Log, TEXT("Test equipped %s in slot %d"), 
-                       *ItemToEquip->ItemName.ToString(), (int32)SlotToEquip);
-                       
-                if (GEngine)
-                {
-                    FString EquipText = FString::Printf(TEXT("Equipped: %s"), 
-                                                      *ItemToEquip->ItemName.ToString());
-                    GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Magenta, EquipText);
-                }
+                GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, 
+                    TEXT("🛡️ Kalkan için önce Kılıç takmalısın! (Shield Logic Test)"));
             }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("Cannot equip %s in slot %d"), 
-                       *ItemToEquip->ItemName.ToString(), (int32)SlotToEquip);
-                       
-                if (GEngine)
-                {
-                    FString ErrorText = FString::Printf(TEXT("Cannot equip: %s"), 
-                                                      *ItemToEquip->ItemName.ToString());
-                    GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, ErrorText);
-                }
-            }
+            UE_LOG(LogTemp, Warning, TEXT("Shield equip blocked - no sword equipped"));
             
-            CurrentTestEquipIndex++;
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("Test equipment item %d is null"), ItemIndex);
-            CurrentTestEquipIndex++; // Skip null item
+            // Skip to next item instead of blocking
+            CurrentTestEquipIndex = (CurrentTestEquipIndex + 1) % TestItems.Num();
+            return;
         }
     }
-    else
+
+    // Equip the item (ORIGINAL LOGIC)
+    EquipmentComponent->Server_EquipItem(TargetSlot, ItemToEquip, 1);
+
+    // Update cycle index (ORIGINAL LOGIC)
+    CurrentTestEquipIndex = (CurrentTestEquipIndex + 1) % TestItems.Num();
+
+    // User feedback (ENHANCED)
+    FString NextItemName = (CurrentTestEquipIndex < TestNames.Num()) ? 
+                          TestNames[CurrentTestEquipIndex] : "End of cycle";
+    if (GEngine)
     {
-        UE_LOG(LogTemp, Warning, TEXT("No test equipment items configured"));
+        FString EquipMessage = FString::Printf(TEXT("⚔️ %s takıldı! (U: %s)"), 
+                                             *ItemName, *NextItemName);
+        GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, EquipMessage);
     }
+
+    UE_LOG(LogTemp, Log, TEXT("Test equipped: %s in slot %d"), *ItemName, (int32)TargetSlot);
 
     // Debug print equipment status
     if (EquipmentComponent)
@@ -1016,4 +1114,145 @@ void ASHICharacter::Server_ToggleEquipmentPanel_Implementation()
 {
     // Consistency function, UI handled client-side
     UE_LOG(LogTemp, Log, TEXT("Server received equipment panel toggle request"));
+}
+
+// Combat Ability Functions Implementation
+void ASHICharacter::UseQAbility()
+{
+    if (AbilityComponent)
+    {
+        AbilityComponent->UseQAbility();
+        UE_LOG(LogTemp, Log, TEXT("%s used Q ability"), *GetName());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AbilityComponent not found for Q ability"));
+    }
+}
+
+void ASHICharacter::UseRAbility()
+{
+    if (AbilityComponent)
+    {
+        AbilityComponent->UseRAbility();
+        UE_LOG(LogTemp, Log, TEXT("%s used R ability"), *GetName());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AbilityComponent not found for R ability"));
+    }
+}
+
+void ASHICharacter::UseFAbility()
+{
+    if (AbilityComponent)
+    {
+        AbilityComponent->UseFAbility();
+        UE_LOG(LogTemp, Log, TEXT("%s used F ability"), *GetName());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AbilityComponent not found for F ability"));
+    }
+}
+
+void ASHICharacter::OnActiveWeaponChanged_Abilities(ESHIEquipmentSlot NewActiveWeapon)
+{
+    if (!AbilityComponent || !EquipmentComponent)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Missing components for ability weapon update"));
+        return;
+    }
+
+    // Get the active weapon data
+    USHIItemData* ActiveWeapon = EquipmentComponent->GetActiveWeapon();
+
+    // Update abilities based on new weapon
+    AbilityComponent->UpdateAbilitiesForWeapon(ActiveWeapon);
+
+    if (ActiveWeapon)
+    {
+        UE_LOG(LogTemp, Log, TEXT("Abilities updated for weapon: %s"), *ActiveWeapon->ItemName.ToString());
+        if (GEngine)
+        {
+            FString AbilityText = FString::Printf(TEXT("⚔️ %s yetenekleri yüklendi!"), *ActiveWeapon->ItemName.ToString());
+            GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, AbilityText);
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("No weapon equipped - abilities cleared"));
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Orange, TEXT("Silah yok - yetenekler temizlendi"));
+        }
+    }
+}
+
+void ASHICharacter::DebugPrintAllSystems() const
+{
+    UE_LOG(LogTemp, Log, TEXT("=== CHARACTER SYSTEM DEBUG ==="));
+    UE_LOG(LogTemp, Log, TEXT("Character: %s"), *GetName());
+
+    // Stats debug
+    if (StatsComponent)
+    {
+        StatsComponent->DebugPrintStats();
+    }
+
+    // Equipment debug
+    if (EquipmentComponent)
+    {
+        EquipmentComponent->DebugPrintEquipment();
+    }
+
+    // Abilities debug
+    if (AbilityComponent)
+    {
+        AbilityComponent->DebugPrintAbilities();
+    }
+
+    // Inventory debug
+    if (InventoryComponent)
+    {
+        int32 UsedSlots = 0;
+        for (int32 i = 0; i < InventoryComponent->InventorySize; i++)
+        {
+            FSHIInventorySlot Slot = InventoryComponent->GetSlot(i);
+            if (Slot.ItemData != nullptr)
+            {
+                UsedSlots++;
+            }
+        }
+        UE_LOG(LogTemp, Log, TEXT("Inventory: %d/%d slots used"), UsedSlots, InventoryComponent->InventorySize);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("=== END SYSTEM DEBUG ==="));
+}
+
+void ASHICharacter::TestEquipShieldDirect()
+{
+    if (!EquipmentComponent)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Equipment component not found"));
+        return;
+    }
+
+    if (!TestShieldItem)
+    {
+        if (GEngine)
+        {
+            GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("TestShieldItem tanımlı değil!"));
+        }
+        return;
+    }
+
+    // Direct shield equip attempt
+    EquipmentComponent->Server_EquipItem(ESHIEquipmentSlot::Kalkan, TestShieldItem, 1);
+    
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow, 
+            TEXT("🛡️ L: Direct Shield Test"));
+    }
 }

@@ -5,6 +5,32 @@
 #include "Engine/Texture2D.h"
 #include "SHIItemData.generated.h"
 
+// Turkish-themed weapon ability types (moved from SHIAbilityComponent to avoid circular dependency)
+UENUM(BlueprintType)
+enum class ESHIWeaponAbilityType : uint8
+{
+    None,
+    // Kılıç abilities
+    KilicSlash,      // Hızlı doğrama
+    KilicThrust,     // Delici saldırı
+    KilicGuard,      // Savunma duruşu
+    
+    // Balta abilities  
+    BaltaChop,       // Güçlü doğrama
+    BaltaThrow,      // Balta fırlatma
+    BaltaWhirlwind,  // Dönen saldırı
+    
+    // Meç abilities
+    MecLunge,        // Ani hamle
+    MecParry,        // Karşı saldırı
+    MecRiposte,      // Geri saldırı
+    
+    // Ateş Asası abilities
+    AtesFireball,    // Ateş topu
+    AtesBurn,        // Yakıcı alan
+    AtesIgnite       // Tutuşturma
+};
+
 // Istanbul-themed item types
 UENUM(BlueprintType)
 enum class ESHIItemType : uint8
@@ -53,6 +79,44 @@ struct FSHIStatModifier
     {
         StatName = FName("None");
         BonusAmount = 0.0f;
+    }
+};
+
+// Weapon Ability data structure for data-driven abilities
+USTRUCT(BlueprintType)
+struct STILLHEREISTANBUL_API FSHIWeaponAbility
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Ability")
+    ESHIWeaponAbilityType AbilityType;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Ability")
+    FText AbilityName;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Ability")
+    FText AbilityDescription;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Ability")
+    float CooldownTime = 5.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Ability")
+    float BaseDamage = 50.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Ability")
+    float Range = 300.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Ability")
+    TSoftObjectPtr<UTexture2D> AbilityIcon;
+
+    FSHIWeaponAbility()
+    {
+        AbilityType = ESHIWeaponAbilityType::None;
+        AbilityName = FText::FromString("No Ability");
+        AbilityDescription = FText::FromString("No description");
+        CooldownTime = 5.0f;
+        BaseDamage = 50.0f;
+        Range = 300.0f;
     }
 };
 
@@ -120,6 +184,11 @@ public:
     // Istanbul flavor - item rarity
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Info")
     FLinearColor RarityColor = FLinearColor::White;
+
+    // Weapon Abilities (only visible for weapons)
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Abilities", 
+              meta = (EditCondition = "ItemType == ESHIItemType::Silah", EditConditionHides))
+    TArray<FSHIWeaponAbility> WeaponAbilities;
 
 public:
     // Data Asset ID for networking
@@ -191,5 +260,23 @@ public:
             default:
                 return false;
         }
+    }
+
+    // Weapon Abilities Helper Functions
+    UFUNCTION(BlueprintPure, Category = "Weapon Abilities")
+    TArray<FSHIWeaponAbility> GetWeaponAbilities() const { return WeaponAbilities; }
+
+    UFUNCTION(BlueprintPure, Category = "Weapon Abilities")
+    bool HasAbilities() const { return WeaponAbilities.Num() > 0; }
+
+    UFUNCTION(BlueprintPure, Category = "Weapon Abilities")
+    int32 GetAbilityCount() const { return WeaponAbilities.Num(); }
+
+    UFUNCTION(BlueprintPure, Category = "Weapon Abilities")
+    FSHIWeaponAbility GetAbilityByIndex(int32 Index) const 
+    { 
+        if (WeaponAbilities.IsValidIndex(Index))
+            return WeaponAbilities[Index];
+        return FSHIWeaponAbility();
     }
 };

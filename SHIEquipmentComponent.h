@@ -140,10 +140,20 @@ public:
     UFUNCTION(BlueprintPure, Category = "Equipment")
     TArray<FSHIStatModifier> GetAllEquipmentStatBonuses() const;
 
-    // Shield dependency check (Kalkan requires Kılıç)
-    UFUNCTION(BlueprintPure, Category = "Equipment")
+    // Enhanced shield validation
+    UFUNCTION(BlueprintPure, Category = "Shield Logic")
+    bool CanEquipShield() const;
+
+    UFUNCTION(BlueprintPure, Category = "Shield Logic")
     bool IsShieldSlotAvailable() const;
 
+    UFUNCTION(BlueprintCallable, Category = "Shield Logic")
+    void ValidateShieldEquipment();
+
+    UFUNCTION(BlueprintCallable, Category = "Shield Logic")
+    bool AutoUnequipShieldIfNeeded();
+
+    // Legacy function (kept for compatibility)
     UFUNCTION(BlueprintPure, Category = "Equipment")
     bool HasSwordEquipped() const;
 
@@ -168,7 +178,6 @@ protected:
     void OnRep_EquipmentState();
 
     // Internal helper functions
-    void ValidateShieldEquipment();
     void BroadcastEquipmentChange(ESHIEquipmentSlot SlotType, USHIItemData* NewItem, USHIItemData* OldItem);
     void BroadcastActiveWeaponChange();
 
@@ -176,6 +185,13 @@ protected:
     bool IsWeaponSlot(ESHIEquipmentSlot SlotType) const;
     bool IsArmorSlot(ESHIEquipmentSlot SlotType) const;
     bool IsAccessorySlot(ESHIEquipmentSlot SlotType) const;
+
+    // Shield dependency validation
+    bool ValidateShieldDependency(USHIItemData* ShieldItem) const;
+
+    // Enhanced weapon detection
+    bool HasValidSwordEquipped() const;
+    USHIItemData* GetEquippedSword() const;
 
 public:
     // Debug functions

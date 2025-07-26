@@ -54,13 +54,13 @@ void USHIEquipmentComponent::Server_EquipItem_Implementation(ESHIEquipmentSlot S
     // Store old item for event broadcasting
     USHIItemData* OldItem = TargetSlot->ItemData;
 
-    // Handle shield dependency logic
+    // ENHANCED: Shield dependency validation
     if (SlotType == ESHIEquipmentSlot::Kalkan)
     {
-        if (!HasSwordEquipped())
+        if (!ValidateShieldDependency(ItemData))
         {
-            UE_LOG(LogTemp, Warning, TEXT("Cannot equip shield without sword equipped"));
-            return;
+            UE_LOG(LogTemp, Warning, TEXT("Shield dependency validation failed"));
+            return; // Block shield equipping
         }
     }
 
@@ -97,6 +97,21 @@ void USHIEquipmentComponent::Server_UnequipItem_Implementation(ESHIEquipmentSlot
     }
 
     USHIItemData* OldItem = TargetSlot->ItemData;
+    
+    // Store sword info before unequipping
+    bool WasSwordUnequipped = false;
+    if (SlotType == ESHIEquipmentSlot::Silah1 || SlotType == ESHIEquipmentSlot::Silah2)
+    {
+        if (OldItem && OldItem->ItemType == ESHIItemType::Silah)
+        {
+            FString ItemName = OldItem->ItemName.ToString();
+            if (ItemName.Contains(TEXT("Kılıç")) || ItemName.Contains(TEXT("Sword")))
+            {
+                WasSwordUnequipped = true;
+                UE_LOG(LogTemp, Log, TEXT("Sword being unequipped: %s"), *ItemName);
+            }
+        }
+    }
 
     // Clear the slot
     TargetSlot->Clear();
@@ -119,8 +134,23 @@ void USHIEquipmentComponent::Server_UnequipItem_Implementation(ESHIEquipmentSlot
         BroadcastActiveWeaponChange();
     }
 
-    // Validate shield equipment after unequipping
-    ValidateShieldEquipment();
+    // ENHANCED: Check if we need to auto-unequip shield after sword removal
+    if (WasSwordUnequipped)
+    {
+        // Small delay to ensure unequip completed first
+        if (GetWorld())
+        {
+            GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
+            {
+                ValidateShieldEquipment();
+            });
+        }
+    }
+    else
+    {
+        // Regular validation for other items
+        ValidateShieldEquipment();
+    }
 
     BroadcastEquipmentChange(SlotType, nullptr, OldItem);
 
@@ -216,24 +246,7 @@ bool USHIEquipmentComponent::IsShieldSlotAvailable() const
     return HasSwordEquipped();
 }
 
-bool USHIEquipmentComponent::HasSwordEquipped() const
-{
-    // Check both weapon slots for sword (Kılıç)
-    for (ESHIEquipmentSlot WeaponSlot : {ESHIEquipmentSlot::Silah1, ESHIEquipmentSlot::Silah2})
-    {
-        const FSHIEquipmentSlot* Slot = EquipmentState.GetSlotByType(WeaponSlot);
-        if (Slot && !Slot->IsEmpty() && Slot->ItemData)
-        {
-            // Check if item is a sword (not shield)
-            if (Slot->ItemData->ItemType == ESHIItemType::Silah && 
-                !Slot->ItemData->ItemName.ToString().Contains(TEXT("Kalkan")))
-            {
-                return true;
-            }
-        }
-    }
-    return false;
-}
+// Old HasSwordEquipped removed - using enhanced HasValidSwordEquipped version below
 
 bool USHIEquipmentComponent::IsValidEquipmentSlot(ESHIEquipmentSlot SlotType, USHIItemData* ItemData) const
 {
@@ -279,36 +292,7 @@ void USHIEquipmentComponent::OnRep_EquipmentState()
     OnActiveWeaponChanged.Broadcast(EquipmentState.ActiveWeaponSlot);
 }
 
-void USHIEquipmentComponent::ValidateShieldEquipment()
-{
-    // Auto-unequip shield if no sword equipped
-    if (!HasSwordEquipped() && !IsSlotEmpty(ESHIEquipmentSlot::Kalkan))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Auto-unequipping shield - no sword equipped"));
-        
-        // Get shield item data before unequipping
-        FSHIEquipmentSlot ShieldSlot = GetEquippedItem(ESHIEquipmentSlot::Kalkan);
-        
-        // Move shield back to inventory if possible
-        if (ASHICharacter* Character = Cast<ASHICharacter>(GetOwner()))
-        {
-            if (USHIInventoryComponent* Inventory = Character->GetInventoryComponent())
-            {
-                if (!ShieldSlot.IsEmpty())
-                {
-                    // Try to add shield back to inventory
-                    if (Inventory->CanAddItem(ShieldSlot.ItemData, ShieldSlot.Quantity))
-                    {
-                        Inventory->Server_AddItem(ShieldSlot.ItemData, ShieldSlot.Quantity);
-                    }
-                }
-            }
-        }
-        
-        // Unequip the shield
-        Server_UnequipItem(ESHIEquipmentSlot::Kalkan);
-    }
-}
+// Old ValidateShieldEquipment removed - using enhanced version below
 
 void USHIEquipmentComponent::BroadcastEquipmentChange(ESHIEquipmentSlot SlotType, USHIItemData* NewItem, USHIItemData* OldItem)
 {
@@ -378,4 +362,150 @@ int32 USHIEquipmentComponent::GetEquippedItemCount() const
         }
     }
     return Count;
+}
+
+// Enhanced Shield Logic Implementation
+bool USHIEquipmentComponent::CanEquipShield() const
+{
+    // Check if we have a valid sword equipped
+    return HasValidSwordEquipped();
+}
+
+bool USHIEquipmentComponent::HasValidSwordEquipped() const
+{
+    // Check both weapon slots for a valid sword (Kılıç)
+    for (ESHIEquipmentSlot WeaponSlot : {ESHIEquipmentSlot::Silah1, ESHIEquipmentSlot::Silah2})
+    {
+        const FSHIEquipmentSlot* Slot = EquipmentState.GetSlotByType(WeaponSlot);
+        if (Slot && !Slot->IsEmpty() && Slot->ItemData)
+        {
+            // Check if item is a sword (Kılıç) - enhanced detection
+            if (Slot->ItemData->ItemType == ESHIItemType::Silah)
+            {
+                FString ItemName = Slot->ItemData->ItemName.ToString();
+                // Enhanced sword detection - multiple variations + encoding fix
+                if (ItemName.Contains(TEXT("Kılıç")) || ItemName.Contains(TEXT("Sword")) ||
+                    ItemName.Contains(TEXT("Kilič")) ||  // Alternative spelling
+                    ItemName.Contains(TEXT("Saber")) ||
+                    ItemName.Contains(TEXT("Sabre")) ||
+                    ItemName.Contains(TEXT("Test K")) ||  // Encoding-safe detection
+                    ItemName.Contains(TEXT("Kilic")))     // ASCII version
+                {
+                    // Make sure it's NOT a shield being misidentified
+                    if (!ItemName.Contains(TEXT("Kalkan")) && !ItemName.Contains(TEXT("Shield")))
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("✅ Valid sword found: %s in slot %d"), *ItemName, (int32)WeaponSlot);
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    
+    UE_LOG(LogTemp, Warning, TEXT("❌ No valid sword equipped - checked Silah1 & Silah2"));
+    return false;
+}
+
+USHIItemData* USHIEquipmentComponent::GetEquippedSword() const
+{
+    // Return the first valid sword found
+    for (ESHIEquipmentSlot WeaponSlot : {ESHIEquipmentSlot::Silah1, ESHIEquipmentSlot::Silah2})
+    {
+        const FSHIEquipmentSlot* Slot = EquipmentState.GetSlotByType(WeaponSlot);
+        if (Slot && !Slot->IsEmpty() && Slot->ItemData)
+        {
+            if (Slot->ItemData->ItemType == ESHIItemType::Silah)
+            {
+                FString ItemName = Slot->ItemData->ItemName.ToString();
+                if (ItemName.Contains(TEXT("Kılıç")) || ItemName.Contains(TEXT("Sword")) ||
+                    ItemName.Contains(TEXT("Test K")) || ItemName.Contains(TEXT("Kilic")))
+                {
+                    if (!ItemName.Contains(TEXT("Kalkan")) && !ItemName.Contains(TEXT("Shield")))
+                    {
+                        return Slot->ItemData;
+                    }
+                }
+            }
+        }
+    }
+    return nullptr;
+}
+
+void USHIEquipmentComponent::ValidateShieldEquipment()
+{
+    // Check if shield is equipped but no sword available
+    const FSHIEquipmentSlot* ShieldSlot = EquipmentState.GetSlotByType(ESHIEquipmentSlot::Kalkan);
+    if (ShieldSlot && !ShieldSlot->IsEmpty())
+    {
+        if (!HasValidSwordEquipped())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Shield equipped but no sword found - auto-unequipping shield"));
+            // Auto-unequip shield
+            AutoUnequipShieldIfNeeded();
+        }
+    }
+}
+
+bool USHIEquipmentComponent::AutoUnequipShieldIfNeeded()
+{
+    const FSHIEquipmentSlot* ShieldSlot = EquipmentState.GetSlotByType(ESHIEquipmentSlot::Kalkan);
+    if (ShieldSlot && !ShieldSlot->IsEmpty() && !HasValidSwordEquipped())
+    {
+        // Get shield item data before unequipping
+        USHIItemData* ShieldItem = ShieldSlot->ItemData;
+        int32 ShieldQuantity = ShieldSlot->Quantity;
+        
+        UE_LOG(LogTemp, Log, TEXT("Auto-unequipping shield: %s (no sword equipped)"), 
+               *ShieldItem->ItemName.ToString());
+        
+        // Unequip shield
+        Server_UnequipItem(ESHIEquipmentSlot::Kalkan);
+        
+        // Show user feedback
+        if (GEngine)
+        {
+            FString ShieldMessage = FString::Printf(TEXT("🛡️ %s otomatik çıkarıldı - Kılıç gerekli!"), 
+                                                   *ShieldItem->ItemName.ToString());
+            GEngine->AddOnScreenDebugMessage(-1, 4.0f, FColor::Orange, ShieldMessage);
+        }
+        
+        return true;
+    }
+    return false;
+}
+
+bool USHIEquipmentComponent::ValidateShieldDependency(USHIItemData* ShieldItem) const
+{
+    if (!ShieldItem)
+    {
+        return false;
+    }
+    
+    // Check if this is a shield item
+    FString ItemName = ShieldItem->ItemName.ToString();
+    bool IsShield = ItemName.Contains(TEXT("Kalkan")) || ItemName.Contains(TEXT("Shield")) ||
+                    ItemName.Contains(TEXT("Buckler"));
+    
+    if (IsShield)
+    {
+        // Shield requires sword
+        if (!HasValidSwordEquipped())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Cannot equip shield %s - no sword equipped"), *ItemName);
+            if (GEngine)
+            {
+                GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, 
+                    TEXT("🛡️ Kalkan takabilmek için önce Kılıç takmalısın!"));
+            }
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Legacy function (kept for compatibility)
+bool USHIEquipmentComponent::HasSwordEquipped() const
+{
+    return HasValidSwordEquipped();
 }

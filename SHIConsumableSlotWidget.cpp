@@ -98,7 +98,17 @@ void USHIConsumableSlotWidget::UseSlot()
 
 void USHIConsumableSlotWidget::OnSlotClicked()
 {
-    UseSlot();
+    UE_LOG(LogTemp, Log, TEXT("Slot %d clicked"), SlotIndex);
+
+    // Safety check before using slot
+    if (SlotIndex >= 3 && SlotIndex <= 6)
+    {
+        UseSlot();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("OnSlotClicked: Invalid slot index %d"), SlotIndex);
+    }
 
     // Visual feedback
     if (GEngine)

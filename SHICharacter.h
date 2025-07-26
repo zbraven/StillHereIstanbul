@@ -5,6 +5,7 @@
 #include "Components/SHIStatsComponent.h"
 #include "Components/SHIInventoryComponent.h"
 #include "Components/SHIEquipmentComponent.h"
+#include "Components/SHIAbilityComponent.h"
 #include "Data/SHIItemData.h"
 #include "Systems/SHIWorldItem.h"
 #include "UI/SHIEquipmentPanelWidget.h"
@@ -93,6 +94,16 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
     UInputAction* TestPopulateHotbarAction; // Y key for hotbar test
 
+    // Combat Ability Actions
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+    UInputAction* UseQAbilityAction;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+    UInputAction* UseRAbilityAction;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+    UInputAction* UseFAbilityAction;
+
     // Camera Components
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
     USpringArmComponent* CameraBoom;
@@ -109,6 +120,9 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SHI Components")
     USHIEquipmentComponent* EquipmentComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SHI Components")
+    USHIAbilityComponent* AbilityComponent;
 
     // UI Components
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
@@ -154,6 +168,8 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Test Items")
     USHIItemData* TestArmorItem;
 
+    // Enhanced: Test Shield for shield logic testing (uses existing TestShieldItem)
+
     // ⬅️ NEW: Test items for spawning and consumables
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "SHI Debug")
     TArray<USHIItemData*> TestConsumableItems; // Consumable test items
@@ -192,6 +208,9 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "SHI Equipment")
     USHIEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
+
+    UFUNCTION(BlueprintPure, Category = "SHI Abilities")
+    USHIAbilityComponent* GetAbilityComponent() const { return AbilityComponent; }
 
     // Consumables hotbar functions
     UFUNCTION(BlueprintCallable, Category = "SHI Consumables")
@@ -244,6 +263,9 @@ protected:
     UFUNCTION(BlueprintCallable, Category = "SHI Debug")
     void TestEquipItem();
 
+    UFUNCTION(BlueprintCallable, Category = "SHI Debug")
+    void TestEquipShieldDirect();
+
     // Consumable functions
     UFUNCTION(BlueprintCallable, Category = "SHI Consumables")
     void UseConsumableSlot3();
@@ -256,6 +278,19 @@ protected:
 
     UFUNCTION(BlueprintCallable, Category = "SHI Consumables")
     void UseConsumableSlot6();
+
+    // Combat ability functions
+    UFUNCTION(BlueprintCallable, Category = "SHI Abilities")
+    void UseQAbility();
+
+    UFUNCTION(BlueprintCallable, Category = "SHI Abilities")
+    void UseRAbility();
+
+    UFUNCTION(BlueprintCallable, Category = "SHI Abilities")
+    void UseFAbility();
+
+    UFUNCTION(BlueprintCallable, Category = "SHI Equipment")
+    void OnActiveWeaponChanged_Abilities(ESHIEquipmentSlot NewActiveWeapon);
 
     // Network functions
     UFUNCTION(Server, Reliable, BlueprintCallable, Category = "SHI Network")
@@ -294,6 +329,10 @@ protected:
 
     // Stats recalculation
     void RecalculateStatsFromEquipment();
+
+    // Debug function
+    UFUNCTION(BlueprintCallable, Category = "SHI Debug")
+    void DebugPrintAllSystems() const;
 
 public:
     // Returns CameraBoom subobject
